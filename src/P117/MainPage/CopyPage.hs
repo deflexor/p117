@@ -5,7 +5,6 @@ module P117.MainPage.CopyPage where
 import Control.Exception.Lifted
 import Control.Monad.Error
 
-
 import Database.HDBC
 import Database.HDBC.Sqlite3
 import Happstack.Server
@@ -34,8 +33,10 @@ getParents conn predicateId pageId = do
 
 pageHandlerPost :: ServerPartT (ErrorT String IO) Response
 pageHandlerPost = do
-    srcPageId <- getInputRead "srcPageId"
-    targetPageId <- getInputRead "targetPageId"
+    srcPageId <- getInputRead "srcPageId"  -- исходный элемент (который копируем)
+    prevSiblPageId <- getInputRead "prevSiblPageId"
+    nextSiblPageId <- getInputRead "nextSiblPageId"
+    targetPageId <- getInputRead "targetPageId" -- целевой элемент (родитель, к которому копируем)
     predicateId <- getInputRead "predicateId"
     pageId <- lift $ bracket (liftIO $ connectSqlite3 "sql/test.db")
                              (liftIO . disconnect)
@@ -51,7 +52,12 @@ pageHandlerPost = do
         -- Нельзя копировать страницу внутрь собственных потомков
         [[cnt2]] <- liftIO $ quickQuery' conn "SELECT COUNT(*) FROM binaryTrue WHERE binaryId = ? AND value1 = ? AND value2 = ?" $ toSql `fmap` [predicateId, srcPageId, targetPageId]
         when ((fromSql cnt2 :: Int) > 0) $ throwError $ structuredErr "This parent already a child of this page"
-        r <- liftIO $ run conn "INSERT INTO binaryTrue (binaryId, value1, value2) VALUES (?, ?, ?)" $ toSql `fmap` [predicateId, targetPageId, srcPageId]
+        r <- case nextSiblPageId of
+          -1 -> liftIO $ run conn "INSERT INTO binaryTrue (binaryId, value1, value2, prevValue2) VALUES (?, ?, ?, ?)" $ toSql `fmap` [predicateId, targetPageId, srcPageId, prevSiblPageId]
+          _ -> do
+            [[pv2]] <- liftIO $ quickQuery' conn "SELECT prevValue2 FROM binaryTrue WHERE binaryId = ? AND value1 = ? AND value2 = ?" $ toSql `fmap` [predicateId, targetPageId, nextSiblPageId]
+            void $ liftIO $ run conn "UPDATE binaryTrue SET prevValue2 = ? WHERE binaryId = ? AND value1 = ? AND value2 = ?" $ toSql `fmap` [srcPageId, predicateId, targetPageId, nextSiblPageId]
+            liftIO $ run conn "INSERT INTO binaryTrue (binaryId, value1, value2, prevValue2) VALUES (?, ?, ?, ?)" $ toSql `fmap` [predicateId, targetPageId, srcPageId, fromSql pv2]
         liftIO $ commit conn
         return r
 

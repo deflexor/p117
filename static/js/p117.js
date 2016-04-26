@@ -329,14 +329,23 @@ $(document).ready(function () {
 
     function onDropHandler(predicateId, targetNode, sourceNode, hitMode) {
         var targetPageId = targetNode.data.pageId;
-        if(hitMode !== 'over') targetPageId = targetNode.getParent().data.pageId;
+        var prevSiblPageId = -1;
+        var nextSiblPageId = -1;
+        if(hitMode !== 'over') {
+            targetPageId = targetNode.getParent().data.pageId;
+            console.log(hitMode, targetNode.data.pageId);
+            if(hitMode === 'after') prevSiblPageId = targetNode.data.pageId;
+            if(hitMode === 'before') nextSiblPageId = targetNode.data.pageId;
+        }
         if(targetPageId === undefined) targetPageId = -1;
         $.ajax({
             type: "POST",
             url: "/mainpage/copypage",
             data: "srcPageId="+sourceNode.data.pageId
                 +"&predicateId="+predicateId
-                +"&targetPageId="+targetPageId,
+                +"&targetPageId="+targetPageId
+                +"&prevSiblPageId="+prevSiblPageId
+                +"&nextSiblPageId="+nextSiblPageId,
             dataType: "json",
             error: ajaxError,
             success: function (ans) {

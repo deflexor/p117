@@ -14,7 +14,7 @@ id INTEGER PRIMARY KEY AUTOINCREMENT,
 binaryId INTEGER,
 value1 TEXT,
 value2 TEXT,
-pos INTEGER DEFAULT -1);
+prevValue2 INTEGER DEFAULT -1);
 INSERT INTO "binaryTrue" VALUES(1,1,'-1','1', -1);
 INSERT INTO "binaryTrue" VALUES(2,1,'-1','2', -1);
 INSERT INTO "binaryTrue" VALUES(10,1,'-1','10', -1);

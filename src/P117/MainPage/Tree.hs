@@ -5,18 +5,14 @@ module P117.MainPage.Tree where
 import Control.Exception.Lifted
 import Control.Monad.Error
 
-
-
-import Data.List (intercalate)
+import Data.List (intercalate, partition, find)
 import Data.Tree
+
 import Database.HDBC
 
 import Happstack.Server
 import P117.DBAccess
 import P117.Types
-
-
-
 
 
 import Text.JSON
@@ -162,14 +158,22 @@ getTreeForPredicate predicateId = do
                 convRow [titleR] = fromSql titleR
             let rootTitle = convRow $ head r
             -- 2. Получаем список дочерних страниц
-            r <- liftIO $ quickQuery' conn "SELECT value2 FROM binaryTrue where binaryId == ? and value1 == ? ORDER BY pos, value2" [toSql predicateId, toSql rootId]
-            let convRow :: [SqlValue] -> Integer
-                convRow [idR] = fromSql idR :: Integer
-            let childrenId = map convRow r
+            r <- liftIO $ quickQuery' conn "SELECT value2,prevValue2 FROM binaryTrue where binaryId == ? and value1 == ? ORDER BY value2" [toSql predicateId, toSql rootId]
+            let convRow :: [SqlValue] -> (Integer,Integer)
+                convRow [v1,v2] = (fromSql v1,fromSql v2)
+            let childrenIds = map convRow r
             -- 3. Строим дочерние деревья
-            children <- mapM (buildTreeFromRoot conn predicateId) childrenId
+            children <- mapM (buildTreeFromRoot conn predicateId) (map fst $ sortByLink childrenIds)
             -- 4. Возвращаем всё дерево
             return $ Node (TreeItem rootTitle rootId) children
+
+sortByLink :: [(Integer, Integer)] -> [(Integer, Integer)]
+sortByLink l =
+  let (lnoparent, lparent) = partition (\(_, p) -> p == -1) l
+      (start, lnoparent') = partition (\(x, _) -> elem x (map snd lparent)) lnoparent
+      mkresult (el:els) res = el:mkresult ((filter (\(_, p) -> p == fst el) lparent) ++ els) res
+      mkresult [] res = res
+  in mkresult start lnoparent'
 
 getFlatTree :: ServerPartT (ErrorT String IO) (Forest TreeItem)
 getFlatTree = do
